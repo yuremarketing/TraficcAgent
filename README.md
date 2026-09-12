@@ -100,3 +100,14 @@ pip install -r requirements.txt
 ## 📄 Licença e Uso
 
 Este projeto é desenvolvido para fins de automação de marketing de afiliados e arbitragem de tráfego. Desenvolvido seguindo as melhores práticas de SEO e políticas oficiais do Google Ads e Mercado Livre.
+
+## Alinhamento da equipe
+
+## Alinhamento da equipe
+
+- [Quiz interativo de decisões](dist/quiz.html)
+- [Documento oficial de alinhamento dos devs](docs/ALINHAMENTO-DEVS.md)
+- [Dashboard do sistema](dist/dashboard.html)
+- [Mockup da pressell pública](dist/index.html)
+
+O quiz deve ser respondido individualmente e consolidado pela equipe antes da implementação do MVP. As decisões oficiais devem ser registradas em `docs/ALINHAMENTO-DEVS.md` por pull request.
