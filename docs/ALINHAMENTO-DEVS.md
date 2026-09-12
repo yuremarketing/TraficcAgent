@@ -1,6 +1,6 @@
 # TraficcAgent — Alinhamento de produto e operação
 
-Este documento acompanha o [quiz interativo](../dist/quiz.html) e deve ser respondido pelos devs antes da implementação do sistema.
+Este documento reúne as decisões que devem ser respondidas pelos devs antes da implementação do sistema.
 
 ## Objetivo
 
@@ -8,8 +8,8 @@ Definir as regras comuns da fábrica de sites afiliados: garimpo de nichos e pro
 
 ## Como usar
 
-1. Cada dev responde ao quiz individualmente.
-2. A equipe compara os arquivos `.txt` gerados.
+1. Cada dev responde às perguntas em uma cópia deste documento ou em uma reunião de alinhamento.
+2. A equipe compara as respostas.
 3. Divergências viram decisões explícitas em reunião.
 4. Uma pessoa registra a resposta oficial neste documento.
 5. Cada decisão aprovada deve virar requisito, issue ou critério de aceite.

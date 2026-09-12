@@ -105,7 +105,6 @@ Este projeto é desenvolvido para fins de automação de marketing de afiliados 
 
 ## Alinhamento da equipe
 
-- [Quiz interativo de decisões](dist/quiz.html)
 - [Documento oficial de alinhamento dos devs](docs/ALINHAMENTO-DEVS.md)
 - [Dashboard do sistema](dist/dashboard.html)
 - [Mockup da pressell pública](dist/index.html)
