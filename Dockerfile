@@ -1,10 +1,13 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY src/ src/
+COPY traficcagent ./traficcagent
 
-CMD ["python", "-m", "src.main"]
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8080
+
+CMD ["python", "-m", "traficcagent"]
