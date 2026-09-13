@@ -29,3 +29,31 @@ def test_modo_real_ainda_nao_implementado_mas_sinalizado():
     assert not client.modo_mock
     with pytest.raises(GoogleAdsMCPError):
         client.get_campanhas_ativas()
+
+
+class FakeMCPTransport:
+    def __init__(self):
+        self.calls = []
+
+    def call_tool(self, name, arguments):
+        self.calls.append((name, arguments))
+        return {"structuredContent": [{"campaign_name": "Campanha real", "dias_ativa": 2, "custo_total": 12.5, "conversoes": 1}]}
+
+
+def test_modo_real_usa_transporte_injetado():
+    transport = FakeMCPTransport()
+    client = GoogleAdsMCPClient(settings=_settings(with_credentials=True), transport=transport)
+    campanhas = client.get_campanhas_ativas()
+    assert campanhas[0].nome == "Campanha real"
+    assert transport.calls[0][0] == "google_ads_run_gaql"
+    assert "SELECT" in transport.calls[0][1]["query"]
+
+
+def test_modo_real_rejeita_resposta_mcp_invalida():
+    class InvalidTransport:
+        def call_tool(self, name, arguments):
+            return {"content": [{"type": "text", "text": "erro"}]}
+
+    client = GoogleAdsMCPClient(settings=_settings(with_credentials=True), transport=InvalidTransport())
+    with pytest.raises(GoogleAdsMCPError, match="Resposta MCP inválida"):
+        client.get_campanhas_ativas()

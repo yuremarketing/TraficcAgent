@@ -13,6 +13,7 @@ pública (`GoogleAdsMCPClient.run_gaql`) já está estável — só o backend mu
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Protocol
 
 from traficcagent.config import Settings, load_settings
 from traficcagent.core.traffic_manager import CampanhaMetrics
@@ -34,9 +35,17 @@ class GoogleAdsMCPError(RuntimeError):
     pass
 
 
+class MCPTransport(Protocol):
+    """Contrato mínimo do adaptador MCP real ou de teste."""
+
+    def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        ...
+
+
 @dataclass
 class GoogleAdsMCPClient:
     settings: Settings
+    transport: MCPTransport | None = None
 
     @classmethod
     def from_env(cls) -> "GoogleAdsMCPClient":
@@ -64,10 +73,39 @@ class GoogleAdsMCPClient:
         ]
 
     def _run_real(self, query: str) -> list[dict]:
+        if self.transport is None:
+            raise GoogleAdsMCPError(
+                "Transporte MCP não configurado. Injete um adaptador "
+                "googleads/google-ads-mcp para executar o modo real."
+            )
+        try:
+            resposta = self.transport.call_tool(
+                "google_ads_run_gaql",
+                {"query": query},
+            )
+        except Exception as exc:
+            raise GoogleAdsMCPError(
+                f"Falha ao executar ferramenta MCP do Google Ads: {exc}"
+            ) from exc
+        return self._normalizar_resposta(resposta)
+
+    @staticmethod
+    def _normalizar_resposta(resposta: Any) -> list[dict]:
+        """Aceita lista direta ou payload MCP com content/structuredContent."""
+        if isinstance(resposta, list):
+            return resposta
+        if isinstance(resposta, dict):
+            if isinstance(resposta.get("structuredContent"), list):
+                return resposta["structuredContent"]
+            if isinstance(resposta.get("data"), list):
+                return resposta["data"]
+            content = resposta.get("content")
+            if isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict) and isinstance(item.get("data"), list):
+                        return item["data"]
         raise GoogleAdsMCPError(
-            "Backend real do Google Ads MCP ainda não implementado — "
-            "requer sessão MCP contra googleads/google-ads-mcp (issue #6). "
-            "Credenciais detectadas no ambiente, mas o transporte real falta."
+            "Resposta MCP inválida: esperada uma lista de métricas de campanha."
         )
 
     def _run_mock(self, query: str) -> list[dict]:
