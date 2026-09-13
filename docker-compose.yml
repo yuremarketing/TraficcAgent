@@ -1,0 +1,18 @@
+services:
+  app:
+    build: .
+    env_file: .env
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: traficcagent
+      POSTGRES_PASSWORD: traficcagent
+      POSTGRES_DB: traficcagent
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+volumes:
+  db_data:

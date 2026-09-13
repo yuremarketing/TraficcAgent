@@ -23,3 +23,21 @@ Abra `dist/index.html` em qualquer navegador. Não exige instalação ou servido
 - Organograma vertical da operação.
 
 Os dados ainda são demonstrativos e ficam em memória do navegador. Banco de dados, autenticação e integrações reais ficam para a próxima fase.
+
+## Backend (em construção)
+
+Esqueleto do agente que vai alimentar o dashboard com dados reais (issues #6, #7, #8, #9, #10, #11).
+
+```bash
+cp .env.example .env   # preencha com suas chaves
+docker compose up
+```
+
+Estrutura:
+
+```text
+src/
+├── garimpo/    # busca e filtragem de produtos no Mercado Livre
+├── conteudo/   # gerador de reviews SEO (RAG 90/10)
+└── anuncios/   # conector GAQL e automação Google Ads
+```
