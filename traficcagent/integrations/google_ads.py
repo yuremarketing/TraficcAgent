@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 import re
+import time
 from typing import Any, Protocol
 
 from traficcagent.config import Settings, load_settings
@@ -45,7 +46,7 @@ class MCPTransport(Protocol):
 
 
 class OfficialGoogleAdsMCPTransport:
-    """Adaptador síncrono para o SDK oficial MCP (stdio ou Streamable HTTP)."""
+    """Adaptador síncrono para o SDK oficial MCP (stdio ou HTTP)."""
 
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -53,24 +54,21 @@ class OfficialGoogleAdsMCPTransport:
     def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
         try:
             import asyncio
-            from mcp import ClientSession, StdioServerParameters
-            from mcp.client.stdio import stdio_client
+            from mcp import Client, StdioServerParameters
         except ImportError as exc:
             raise GoogleAdsMCPError("Dependência MCP ausente; instale mcp>=1.2.0.") from exc
 
-        async def invoke_stdio():
-            params = StdioServerParameters(command=self.settings.google_ads_mcp_command, args=[])
-            async with stdio_client(params) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    return await session.call_tool(name, arguments=arguments)
+        endpoint = (self.settings.google_ads_mcp_url or "").strip()
+        target = (StdioServerParameters(command=self.settings.google_ads_mcp_command, args=[])
+                  if self.settings.google_ads_mcp_transport == "stdio" else endpoint)
+        if not target:
+            raise GoogleAdsMCPError("GOOGLE_ADS_MCP_URL é obrigatório no transporte HTTP.")
 
-        if self.settings.google_ads_mcp_transport == "stdio":
-            return asyncio.run(invoke_stdio())
-        raise GoogleAdsMCPError(
-            "Transporte HTTP MCP requer a sessão Streamable HTTP do SDK; "
-            "configure GOOGLE_ADS_MCP_TRANSPORT=stdio por enquanto."
-        )
+        async def invoke():
+            async with Client(target) as client:
+                return await client.call_tool(name, arguments)
+
+        return asyncio.run(invoke())
 
 
 @dataclass
@@ -111,6 +109,25 @@ class GoogleAdsMCPClient:
 
     def _run_real(self, query: str) -> list[dict]:
         transport = self.transport or OfficialGoogleAdsMCPTransport(self.settings)
+        tentativas = max(1, self.settings.google_ads_mcp_max_retries)
+        for tentativa in range(tentativas):
+            try:
+                return self._call_and_normalize(transport, query)
+            except Exception as exc:
+                mensagem = str(exc).upper()
+                recuperavel = any(chave in mensagem for chave in (
+                    "429", "RATE", "TIMEOUT", "UNAVAILABLE", "RESOURCE_EXHAUSTED", "CONNECTION"
+                ))
+                if not recuperavel or tentativa == tentativas - 1:
+                    raise GoogleAdsMCPError(
+                        f"Falha ao executar ferramenta MCP do Google Ads: {exc}"
+                    ) from exc
+                LOGGER.warning("Falha transitória no MCP; reconectando (tentativa %s/%s).", tentativa + 1, tentativas)
+                time.sleep(min(2 ** tentativa, 8))
+
+        raise GoogleAdsMCPError("Falha inesperada no transporte MCP.")
+
+    def _call_and_normalize(self, transport: MCPTransport, query: str) -> list[dict]:
         try:
             if self.settings.google_ads_mcp_tool == "search":
                 argumentos = {
@@ -123,9 +140,7 @@ class GoogleAdsMCPClient:
                 argumentos = {"query": query}
             resposta = transport.call_tool(self.settings.google_ads_mcp_tool, argumentos)
         except Exception as exc:
-            raise GoogleAdsMCPError(
-                f"Falha ao executar ferramenta MCP do Google Ads: {exc}"
-            ) from exc
+            raise
         return self._normalizar_resposta(resposta)
 
     @staticmethod
@@ -138,6 +153,11 @@ class GoogleAdsMCPClient:
         """Aceita lista direta ou payload MCP com content/structuredContent."""
         if isinstance(resposta, list):
             return resposta
+        structured = getattr(resposta, "structured_content", None)
+        if isinstance(structured, dict):
+            resposta = structured
+        elif isinstance(structured, list):
+            return structured
         if isinstance(resposta, dict):
             if isinstance(resposta.get("structuredContent"), list):
                 return resposta["structuredContent"]
