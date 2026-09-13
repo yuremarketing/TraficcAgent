@@ -40,6 +40,20 @@ python -m traficcagent # smoke test: mostra o que está em modo real vs mock
 docker compose up      # sobe o app + Postgres via Docker
 ```
 
+### Preparação para Cloud Run
+
+O arquivo `cloudbuild.yaml` prepara build, publicação da imagem e deploy
+privado na porta 8080. Execute pelo Cloud Build com um projeto configurado:
+
+```bash
+gcloud builds submit --config cloudbuild.yaml .
+```
+
+Antes do deploy real, o container precisa expor um servidor HTTP persistente
+na porta 8080. O comando atual é apenas um smoke test e encerra após mostrar o
+status das integrações. Credenciais devem ser fornecidas por Secret Manager ou
+variáveis do ambiente, nunca pelo repositório.
+
 Estrutura:
 
 ```text
