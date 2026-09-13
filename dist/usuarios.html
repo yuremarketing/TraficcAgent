@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TraficcAgent — Simulação de usuários</title>
+  <style>
+    :root{font-family:Inter,system-ui,sans-serif;color:#172033;background:#f5f7fb}body{margin:0;padding:24px}.wrap{max-width:900px;margin:auto}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px}.top h1{margin:0;font-size:28px}.muted{color:#718096}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}.card{background:#fff;border:1px solid #e5e9f1;border-radius:14px;padding:22px;box-shadow:0 8px 24px #1720330b}.avatar{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:#4169e1;color:#fff;font-weight:800;font-size:20px}.avatar.y{background:#f0a928}.card h2{margin:16px 0 4px}.role{color:#4169e1;font-weight:700}.permissions{padding-left:18px;line-height:1.8}.btn{display:inline-block;text-decoration:none;border:0;border-radius:9px;padding:11px 15px;background:#4169e1;color:#fff;font-weight:750;cursor:pointer}.btn.alt{background:#eef2ff;color:#4169e1;margin-left:7px}.active{outline:3px solid #9eb3ff}.status{margin-top:18px;padding:12px;border-radius:9px;background:#eef7f2;color:#16734f;font-weight:700}@media(max-width:620px){body{padding:15px}.top{display:block}.top .btn{margin-top:15px}.grid{grid-template-columns:1fr}.btn.alt{margin-left:0;margin-top:8px}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <div><h1>Simulação de usuários</h1><p class="muted">Ambiente local do TraficcAgent — sem login real.</p></div>
+      <a class="btn" href="index.html">Abrir dashboard</a>
+    </header>
+    <section class="grid" aria-label="Perfis disponíveis">
+      <article class="card" data-user="philipy">
+        <div class="avatar">P</div><h2>Philipy</h2><div class="role">Dev · Frontend e MVD</div>
+        <ul class="permissions"><li>Criar e editar sites próprios</li><li>Gerenciar pautas, reviews e calendário</li><li>Validar conteúdo e links em modo mock</li><li>Exportar dados locais</li></ul>
+        <button class="btn select" type="button">Entrar como Philipy</button>
+      </article>
+      <article class="card" data-user="yure">
+        <div class="avatar y">Y</div><h2>Yure</h2><div class="role">Administrador · Backend e operação</div>
+        <ul class="permissions"><li>Visão geral de todos os sites</li><li>Equipe, permissões e configurações</li><li>Credenciais e integrações reais</li><li>Aprovar deploy e regras de produção</li></ul>
+        <button class="btn select" type="button">Entrar como Yure</button>
+      </article>
+    </section>
+    <div class="status" id="status" role="status">Nenhum perfil selecionado.</div>
+  </main>
+  <script>
+    const key='traficcagent-active-user-v1';
+    const labels={philipy:'Philipy ativo — produção frontend e validação do MVD.',yure:'Yure ativo — administração, integrações e decisões de produção.'};
+    const selected=localStorage.getItem(key); if(selected){document.querySelector(`[data-user="${selected}"]`)?.classList.add('active');document.querySelector('#status').textContent=labels[selected]||'Perfil ativo.';}
+    document.querySelectorAll('.select').forEach(button=>button.addEventListener('click',()=>{const user=button.closest('[data-user]').dataset.user;localStorage.setItem(key,user);document.querySelectorAll('[data-user]').forEach(card=>card.classList.remove('active'));button.closest('[data-user]').classList.add('active');document.querySelector('#status').textContent=labels[user];}));
+  </script>
+</body>
+</html>
