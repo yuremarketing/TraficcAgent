@@ -109,6 +109,8 @@ def gerar_schema_jsonld(produto: Produto) -> dict:
 def gerar_rascunho_review(produto: Produto, llm: LLMBackend | None = None) -> ReviewDraft:
     llm = llm or MockLLMBackend()
     corpo = llm.generate(montar_prompt_review(produto))
+    if not isinstance(corpo, str) or not corpo.strip():
+        raise ValueError("LLM não retornou conteúdo válido para o review.")
     return ReviewDraft(
         produto=produto,
         corpo_ia=corpo,
