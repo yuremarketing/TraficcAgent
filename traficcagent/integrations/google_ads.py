@@ -1,14 +1,13 @@
-"""Cliente para o servidor MCP do Google Ads (issue #6).
+"""Cliente para o servidor MCP oficial do Google Ads (issue #6).
 
 Sem GOOGLE_ADS_DEVELOPER_TOKEN e GOOGLE_ADS_CUSTOMER_ID configurados, o
 cliente cai automaticamente em modo mock — devolve dados de campanha
 determinísticos, suficientes para testar toda a lógica de #9 e #11 sem
 depender de acesso real ao Google Ads.
 
-TODO (bloqueado por credencial, ver issue #6): implementar `_run_real`
-usando o pacote `mcp` para abrir uma sessão de stdio/SSE com o servidor
-`googleads/google-ads-mcp` e executar a query GAQL de fato. A assinatura
-pública (`GoogleAdsMCPClient.run_gaql`) já está estável — só o backend muda.
+O transporte oficial é opcional no import: o projeto continua executável em
+modo mock, mas com credenciais e o pacote ``mcp`` abre uma sessão stdio ou
+Streamable HTTP e chama a ferramenta oficial ``search``.
 """
 from __future__ import annotations
 
@@ -43,6 +42,35 @@ class MCPTransport(Protocol):
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
         ...
+
+
+class OfficialGoogleAdsMCPTransport:
+    """Adaptador síncrono para o SDK oficial MCP (stdio ou Streamable HTTP)."""
+
+    def __init__(self, settings: Settings):
+        self.settings = settings
+
+    def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        try:
+            import asyncio
+            from mcp import ClientSession, StdioServerParameters
+            from mcp.client.stdio import stdio_client
+        except ImportError as exc:
+            raise GoogleAdsMCPError("Dependência MCP ausente; instale mcp>=1.2.0.") from exc
+
+        async def invoke_stdio():
+            params = StdioServerParameters(command=self.settings.google_ads_mcp_command, args=[])
+            async with stdio_client(params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    return await session.call_tool(name, arguments=arguments)
+
+        if self.settings.google_ads_mcp_transport == "stdio":
+            return asyncio.run(invoke_stdio())
+        raise GoogleAdsMCPError(
+            "Transporte HTTP MCP requer a sessão Streamable HTTP do SDK; "
+            "configure GOOGLE_ADS_MCP_TRANSPORT=stdio por enquanto."
+        )
 
 
 @dataclass
@@ -82,16 +110,18 @@ class GoogleAdsMCPClient:
         ]
 
     def _run_real(self, query: str) -> list[dict]:
-        if self.transport is None:
-            raise GoogleAdsMCPError(
-                "Transporte MCP não configurado. Injete um adaptador "
-                "googleads/google-ads-mcp para executar o modo real."
-            )
+        transport = self.transport or OfficialGoogleAdsMCPTransport(self.settings)
         try:
-            resposta = self.transport.call_tool(
-                "google_ads_run_gaql",
-                {"query": query},
-            )
+            if self.settings.google_ads_mcp_tool == "search":
+                argumentos = {
+                    "customer_id": self.settings.google_ads_customer_id,
+                    "fields": ["campaign.name", "metrics.cost_micros", "metrics.conversions", "segments.date"],
+                    "resource": "campaign",
+                    "conditions": ["campaign.status = 'ENABLED'"],
+                }
+            else:
+                argumentos = {"query": query}
+            resposta = transport.call_tool(self.settings.google_ads_mcp_tool, argumentos)
         except Exception as exc:
             raise GoogleAdsMCPError(
                 f"Falha ao executar ferramenta MCP do Google Ads: {exc}"

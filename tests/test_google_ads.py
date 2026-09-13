@@ -51,8 +51,9 @@ def test_modo_real_usa_transporte_injetado():
     client = GoogleAdsMCPClient(settings=_settings(with_credentials=True), transport=transport)
     campanhas = client.get_campanhas_ativas()
     assert campanhas[0].nome == "Campanha real"
-    assert transport.calls[0][0] == "google_ads_run_gaql"
-    assert "SELECT" in transport.calls[0][1]["query"]
+    assert transport.calls[0][0] == "search"
+    assert transport.calls[0][1]["resource"] == "campaign"
+    assert transport.calls[0][1]["customer_id"] == "123"
 
 
 def test_modo_real_transport_error_eh_convertido():
