@@ -30,9 +30,10 @@ def test_query_gaql_valida():
     assert not GoogleAdsMCPClient.validar_query_gaql("DELETE FROM campaign")
 
 
-def test_modo_real_ainda_nao_implementado_mas_sinalizado():
+def test_modo_real_sem_sdk_sinaliza_erro_claro(monkeypatch):
     client = GoogleAdsMCPClient(settings=_settings(with_credentials=True))
     assert not client.modo_mock
+    monkeypatch.setattr("traficcagent.integrations.google_ads.OfficialGoogleAdsMCPTransport.call_tool", lambda *_: (_ for _ in ()).throw(ImportError("mcp")))
     with pytest.raises(GoogleAdsMCPError):
         client.get_campanhas_ativas()
 
@@ -92,3 +93,41 @@ def test_modo_real_rejeita_resposta_mcp_invalida():
     client = GoogleAdsMCPClient(settings=_settings(with_credentials=True), transport=InvalidTransport())
     with pytest.raises(GoogleAdsMCPError, match="Resposta MCP inválida"):
         client.get_campanhas_ativas()
+
+
+def test_retry_em_timeout_e_depois_sucesso(monkeypatch):
+    class FlakyTransport:
+        def __init__(self):
+            self.calls = 0
+
+        def call_tool(self, name, arguments):
+            self.calls += 1
+            if self.calls == 1:
+                raise TimeoutError("timeout")
+            return [{"campaign_name": "Recuperada"}]
+
+    monkeypatch.setattr("traficcagent.integrations.google_ads.time.sleep", lambda _: None)
+    transport = FlakyTransport()
+    client = GoogleAdsMCPClient(settings=_settings(True), transport=transport)
+    assert client.run_gaql("SELECT campaign.name FROM campaign")[0]["campaign_name"] == "Recuperada"
+    assert transport.calls == 2
+
+
+def test_rate_limit_esgota_tentativas(monkeypatch):
+    class RateLimitedTransport:
+        def call_tool(self, name, arguments):
+            raise RuntimeError("429 rate limit")
+
+    monkeypatch.setattr("traficcagent.integrations.google_ads.time.sleep", lambda _: None)
+    settings = _settings(True)
+    settings = Settings(**{**settings.__dict__, "google_ads_mcp_max_retries": 2})
+    client = GoogleAdsMCPClient(settings=settings, transport=RateLimitedTransport())
+    with pytest.raises(GoogleAdsMCPError, match="rate limit"):
+        client.run_gaql("SELECT campaign.name FROM campaign")
+
+
+def test_transporte_http_exige_url():
+    settings = Settings(**{**_settings(True).__dict__, "google_ads_mcp_transport": "streamable-http"})
+    client = GoogleAdsMCPClient(settings=settings)
+    with pytest.raises(GoogleAdsMCPError, match="URL"):
+        client.run_gaql("SELECT campaign.name FROM campaign")

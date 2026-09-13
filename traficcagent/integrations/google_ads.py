@@ -52,13 +52,15 @@ class OfficialGoogleAdsMCPTransport:
         self.settings = settings
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        endpoint = (self.settings.google_ads_mcp_url or "").strip()
+        if self.settings.google_ads_mcp_transport != "stdio" and not endpoint:
+            raise GoogleAdsMCPError("GOOGLE_ADS_MCP_URL é obrigatório no transporte HTTP.")
         try:
             import asyncio
             from mcp import Client, StdioServerParameters
         except ImportError as exc:
             raise GoogleAdsMCPError("Dependência MCP ausente; instale mcp>=1.2.0.") from exc
 
-        endpoint = (self.settings.google_ads_mcp_url or "").strip()
         target = (StdioServerParameters(command=self.settings.google_ads_mcp_command, args=[])
                   if self.settings.google_ads_mcp_transport == "stdio" else endpoint)
         if not target:
