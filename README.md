@@ -22,7 +22,7 @@ Abra `dist/index.html` em qualquer navegador. Não exige instalação ou servido
 - Configurações do modelo 90–10.
 - Organograma vertical da operação.
 
-Os dados ainda são demonstrativos e ficam em memória do navegador. Banco de dados, autenticação e integrações reais ficam para a próxima fase.
+Os dados do mockup ficam no navegador. O backend já possui lógica testada e integrações externas em modo mock até as credenciais e transportes oficiais serem configurados.
 
 ## Backend (em construção)
 
@@ -35,6 +35,7 @@ chegarem via `.env`.
 cp .env.example .env   # preencha com suas chaves
 pip install -r requirements.txt
 pytest                 # roda os testes de lógica de negócio
+pytest tests/test_google_ads.py -q  # testa o transporte MCP com fake
 python -m traficcagent # smoke test: mostra o que está em modo real vs mock
 docker compose up      # sobe o app + Postgres via Docker
 ```

@@ -13,6 +13,8 @@ pública (`GoogleAdsMCPClient.run_gaql`) já está estável — só o backend mu
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
+import re
 from typing import Any, Protocol
 
 from traficcagent.config import Settings, load_settings
@@ -29,6 +31,7 @@ SELECT
 FROM campaign
 WHERE campaign.status = 'ENABLED'
 """
+LOGGER = logging.getLogger(__name__)
 
 
 class GoogleAdsMCPError(RuntimeError):
@@ -56,8 +59,14 @@ class GoogleAdsMCPClient:
         return not self.settings.has_google_ads_credentials
 
     def run_gaql(self, query: str) -> list[dict]:
+        if not query.strip():
+            raise GoogleAdsMCPError("Query GAQL não pode ser vazia.")
+        if not self.validar_query_gaql(query):
+            raise GoogleAdsMCPError("Query GAQL inválida.")
         if self.modo_mock:
+            LOGGER.info("Google Ads em modo mock; consulta não enviada.")
             return self._run_mock(query)
+        LOGGER.info("Executando consulta GAQL via transporte MCP configurado.")
         return self._run_real(query)
 
     def get_campanhas_ativas(self) -> list[CampanhaMetrics]:
@@ -88,6 +97,11 @@ class GoogleAdsMCPClient:
                 f"Falha ao executar ferramenta MCP do Google Ads: {exc}"
             ) from exc
         return self._normalizar_resposta(resposta)
+
+    @staticmethod
+    def validar_query_gaql(query: str) -> bool:
+        normalizada = re.sub(r"\s+", " ", query).strip().upper()
+        return normalizada.startswith("SELECT ") and " FROM " in normalizada
 
     @staticmethod
     def _normalizar_resposta(resposta: Any) -> list[dict]:
