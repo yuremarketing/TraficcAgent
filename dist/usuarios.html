@@ -16,13 +16,13 @@
     </header>
     <section class="grid" aria-label="Perfis disponíveis">
       <article class="card" data-user="philipy">
-        <div class="avatar">P</div><h2>Philipy</h2><div class="role">Investidor · Vendas e portfólio</div>
-        <ul class="permissions"><li>Acompanhar investimentos e resultados</li><li>Selecionar nichos e produtos</li><li>Gerenciar links e oportunidades comerciais</li><li>Validar retorno e estratégia de vendas</li></ul>
+        <div class="avatar">P</div><h2>Philipy</h2><div class="role">Sócio Capitalista · Dev junior · Gerente de Distribuição e vendas</div>
+        <ul class="permissions"><li>Acompanhar investimentos e resultados</li><li>Gerenciar distribuição dos sites e produtos</li><li>Selecionar nichos e oportunidades comerciais</li><li>Validar retorno e estratégia de vendas</li></ul>
         <button class="btn select" type="button">Entrar como Philipy</button>
       </article>
       <article class="card" data-user="yure">
-        <div class="avatar y">Y</div><h2>Yure</h2><div class="role">Dev sênior · Vendas e arquitetura</div>
-        <ul class="permissions"><li>Definir arquitetura e padrões técnicos</li><li>Revisar código e integrações</li><li>Gerenciar operação e vendas</li><li>Aprovar deploy e regras de produção</li></ul>
+        <div class="avatar y">Y</div><h2>Yure</h2><div class="role">Sócio Operacional · Dev sênior · Gerente de Arquitetura e vendas</div>
+        <ul class="permissions"><li>Definir arquitetura e padrões técnicos</li><li>Revisar código e integrações</li><li>Gerenciar operação, arquitetura e vendas</li><li>Aprovar deploy e regras de produção</li></ul>
         <button class="btn select" type="button">Entrar como Yure</button>
       </article>
     </section>
@@ -30,7 +30,7 @@
   </main>
   <script>
     const key='traficcagent-active-user-v1';
-    const labels={philipy:'Philipy ativo — investimentos, oportunidades e vendas.',yure:'Yure ativo — desenvolvimento sênior, arquitetura e vendas.'};
+    const labels={philipy:'Philipy ativo — sócio capitalista, distribuição e vendas.',yure:'Yure ativo — sócio operacional, arquitetura e vendas.'};
     const selected=localStorage.getItem(key); if(selected){document.querySelector(`[data-user="${selected}"]`)?.classList.add('active');document.querySelector('#status').textContent=labels[selected]||'Perfil ativo.';}
     document.querySelectorAll('.select').forEach(button=>button.addEventListener('click',()=>{const user=button.closest('[data-user]').dataset.user;localStorage.setItem(key,user);document.querySelectorAll('[data-user]').forEach(card=>card.classList.remove('active'));button.closest('[data-user]').classList.add('active');document.querySelector('#status').textContent=labels[user];}));
   </script>
