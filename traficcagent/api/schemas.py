@@ -52,7 +52,9 @@ class SiteCreate(BaseModel):
     nicho: str = Field(..., min_length=1, description="Nicho do site")
     responsavel: str = Field("Ana", description="Dev/sócio responsável")
     status: str = Field("Planejamento", description="Status na esteira")
-    user_id: Optional[str] = Field(None, description="Identificador do usuário / proprietário")
+    # Sem user_id aqui de propósito: o dono é sempre o usuário autenticado
+    # da sessão (Authorization: Bearer <token>), nunca um valor vindo do
+    # cliente — era exatamente essa brecha que permitia IDOR antes (#28).
 
 
 class SiteResponse(BaseModel):
@@ -61,4 +63,24 @@ class SiteResponse(BaseModel):
     nicho: str
     responsavel: str
     status: str
-    user_id: Optional[str] = None
+    user_id: int
+
+
+class UsuarioCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=80)
+    password: str = Field(..., min_length=6, description="Mínimo 6 caracteres")
+
+
+class UsuarioResponse(BaseModel):
+    id: int
+    username: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"

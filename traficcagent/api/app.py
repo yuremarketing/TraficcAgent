@@ -7,31 +7,40 @@ operação distribuída:
 - GET /api/campanhas: métricas de campanhas ativas via Google Ads MCP
 - GET /api/produtos: catálogo avaliado com regras financeiras de margem
 - POST /api/produtos/avaliar: avaliação de produto pontual
-- GET /api/sites: listagem de sites com suporte a user_id
-- POST /api/sites: cadastro de novo site
-- GET /api/sites/{site_id}: detalhe de um site
+- POST /api/auth/register, /api/auth/login: cadastro e sessão (issue #27)
+- GET/POST /api/sites, GET /api/sites/{site_id}: exigem sessão válida
+  (Authorization: Bearer <token>) e só enxergam/afetam sites do próprio
+  usuário autenticado — nunca um user_id vindo do cliente (issue #28)
 """
 from __future__ import annotations
 
 import logging
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Header, Query, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 
+from traficcagent.api import sites_store
+from traficcagent.api.auth import create_session, get_current_user, hash_password, verify_password
+from traficcagent.api.models import Usuario
 from traficcagent.api.schemas import (
     CampanhaResponse,
     HealthResponse,
+    LoginRequest,
     ProdutoAvaliacaoResponse,
     ProdutoInput,
     SiteCreate,
     SiteResponse,
     StatusResponse,
+    TokenResponse,
+    UsuarioCreate,
+    UsuarioResponse,
 )
-from traficcagent.api.sites_store import store
 from traficcagent.config import Settings, load_settings
 from traficcagent.core.financial_engine import Produto, avaliar_produto
 from traficcagent.core.traffic_manager import avaliar_campanha
+from traficcagent.db import get_db, init_db
 from traficcagent.integrations.google_ads import GoogleAdsMCPClient, GoogleAdsMCPError
 
 LOGGER = logging.getLogger(__name__)
@@ -56,6 +65,37 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     # Armazena settings no app state para injeção / testes
     app.state.settings = app_settings
+    init_db()
+
+    @app.post(
+        "/api/auth/register",
+        response_model=UsuarioResponse,
+        status_code=status.HTTP_201_CREATED,
+        tags=["Auth"],
+    )
+    def register(payload: UsuarioCreate, db: Session = Depends(get_db)) -> UsuarioResponse:
+        existente = db.query(Usuario).filter(Usuario.username == payload.username).first()
+        if existente:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Nome de usuário já existe.",
+            )
+        usuario = Usuario(username=payload.username, password_hash=hash_password(payload.password))
+        db.add(usuario)
+        db.commit()
+        db.refresh(usuario)
+        return UsuarioResponse(id=usuario.id, username=usuario.username)
+
+    @app.post("/api/auth/login", response_model=TokenResponse, tags=["Auth"])
+    def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+        usuario = db.query(Usuario).filter(Usuario.username == payload.username).first()
+        if not usuario or not verify_password(payload.password, usuario.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Usuário ou senha inválidos.",
+            )
+        token = create_session(usuario.id)
+        return TokenResponse(access_token=token)
 
     @app.get("/healthz", response_model=HealthResponse, tags=["Health"])
     def healthcheck() -> HealthResponse:
@@ -173,12 +213,11 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @app.get("/api/sites", response_model=list[SiteResponse], tags=["Sites"])
     def list_sites(
-        user_id: Optional[str] = Query(None, description="Filtrar por proprietário"),
-        x_user_id: Optional[str] = Header(None, alias="X-User-Id"),
+        current_user: Usuario = Depends(get_current_user),
+        db: Session = Depends(get_db),
     ) -> list[SiteResponse]:
-        filtro_user = user_id or x_user_id
-        sites = store.list_sites(filtro_user)
-        return [SiteResponse(**s) for s in sites]
+        sites = sites_store.list_sites(db, owner_id=current_user.id)
+        return [SiteResponse(id=s.id, nome=s.nome, nicho=s.nicho, responsavel=s.responsavel, status=s.status, user_id=s.user_id) for s in sites]
 
     @app.post(
         "/api/sites",
@@ -188,7 +227,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     )
     def create_site(
         payload: SiteCreate,
-        x_user_id: Optional[str] = Header(None, alias="X-User-Id"),
+        current_user: Usuario = Depends(get_current_user),
+        db: Session = Depends(get_db),
     ) -> SiteResponse:
         nome = payload.nome.strip()
         nicho = payload.nicho.strip()
@@ -198,25 +238,45 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
                 detail="Nome e nicho são obrigatórios e não podem ser vazios.",
             )
 
-        dono = payload.user_id or x_user_id
-        novo_site = store.add_site(
+        novo_site = sites_store.add_site(
+            db,
+            owner_id=current_user.id,
             nome=nome,
             nicho=nicho,
             responsavel=payload.responsavel,
             status=payload.status,
-            user_id=dono,
         )
-        return SiteResponse(**novo_site)
+        return SiteResponse(
+            id=novo_site.id,
+            nome=novo_site.nome,
+            nicho=novo_site.nicho,
+            responsavel=novo_site.responsavel,
+            status=novo_site.status,
+            user_id=novo_site.user_id,
+        )
 
     @app.get("/api/sites/{site_id}", response_model=SiteResponse, tags=["Sites"])
-    def get_site(site_id: int) -> SiteResponse:
-        site = store.get_site(site_id)
+    def get_site(
+        site_id: int,
+        current_user: Usuario = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> SiteResponse:
+        site = sites_store.get_site_for_owner(db, site_id=site_id, owner_id=current_user.id)
         if not site:
+            # Mesma resposta pra "não existe" e "existe mas não é seu" —
+            # de propósito, pra não vazar a existência de sites de terceiros.
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Site com ID {site_id} não encontrado.",
             )
-        return SiteResponse(**site)
+        return SiteResponse(
+            id=site.id,
+            nome=site.nome,
+            nicho=site.nicho,
+            responsavel=site.responsavel,
+            status=site.status,
+            user_id=site.user_id,
+        )
 
     return app
 

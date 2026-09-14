@@ -5,15 +5,15 @@ import pytest
 from fastapi.testclient import TestClient
 
 from traficcagent.api.app import create_app
-from traficcagent.api.sites_store import store
 from traficcagent.config import BusinessRules, Settings
 
 
-@pytest.fixture(autouse=True)
-def reset_store():
-    store.reset()
-    yield
-    store.reset()
+def registrar_e_logar(client: TestClient, username: str, password: str = "senha123456") -> dict[str, str]:
+    """Registra um usuário novo, loga, e devolve o header Authorization pronto."""
+    client.post("/api/auth/register", json={"username": username, "password": password})
+    login = client.post("/api/auth/login", json={"username": username, "password": password})
+    token = login.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
@@ -116,56 +116,58 @@ def test_avaliar_produto_invalido(client: TestClient) -> None:
     assert response.status_code == 422
 
 
-def test_sites_list_and_filter(client: TestClient) -> None:
-    # Listagem completa
-    response = client.get("/api/sites")
-    assert response.status_code == 200
-    sites = response.json()
-    assert len(sites) >= 4
+def test_sites_requer_autenticacao(client: TestClient) -> None:
+    assert client.get("/api/sites").status_code == 401
+    assert client.post("/api/sites", json={"nome": "X", "nicho": "Y"}).status_code == 401
+    assert client.get("/api/sites/1").status_code == 401
 
-    # Filtro por user_id query param
-    resp_yure = client.get("/api/sites?user_id=yure")
-    assert resp_yure.status_code == 200
-    sites_yure = resp_yure.json()
-    assert len(sites_yure) > 0
-    assert all(s["user_id"] == "yure" for s in sites_yure)
 
-    # Filtro por Header X-User-Id
-    resp_philipy = client.get("/api/sites", headers={"X-User-Id": "philipy"})
-    assert resp_philipy.status_code == 200
-    sites_philipy = resp_philipy.json()
-    assert len(sites_philipy) > 0
-    assert all(s["user_id"] == "philipy" for s in sites_philipy)
+def test_sites_list_por_usuario(client: TestClient) -> None:
+    headers_yure = registrar_e_logar(client, "yure")
+    headers_philipy = registrar_e_logar(client, "philipy")
+
+    client.post("/api/sites", json={"nome": "Site do Yure", "nicho": "Casa"}, headers=headers_yure)
+    client.post("/api/sites", json={"nome": "Site do Philipy", "nicho": "Pet"}, headers=headers_philipy)
+
+    sites_yure = client.get("/api/sites", headers=headers_yure).json()
+    assert len(sites_yure) == 1
+    assert sites_yure[0]["nome"] == "Site do Yure"
+
+    sites_philipy = client.get("/api/sites", headers=headers_philipy).json()
+    assert len(sites_philipy) == 1
+    assert sites_philipy[0]["nome"] == "Site do Philipy"
 
 
 def test_sites_create_and_get(client: TestClient) -> None:
+    headers = registrar_e_logar(client, "yure")
     novo = {
         "nome": "Meu Novo Site Afiliado",
         "nicho": "Saúde e Bem Estar",
         "responsavel": "Yure",
         "status": "Planejamento",
-        "user_id": "yure",
     }
-    create_resp = client.post("/api/sites", json=novo)
+    create_resp = client.post("/api/sites", json=novo, headers=headers)
     assert create_resp.status_code == 201
     created_data = create_resp.json()
     assert created_data["nome"] == "Meu Novo Site Afiliado"
     assert created_data["nicho"] == "Saúde e Bem Estar"
-    assert created_data["user_id"] == "yure"
     site_id = created_data["id"]
 
     # Busca por ID
-    get_resp = client.get(f"/api/sites/{site_id}")
+    get_resp = client.get(f"/api/sites/{site_id}", headers=headers)
     assert get_resp.status_code == 200
     assert get_resp.json()["id"] == site_id
+    assert get_resp.json()["user_id"] == created_data["user_id"]
 
 
 def test_sites_get_not_found(client: TestClient) -> None:
-    response = client.get("/api/sites/999999")
+    headers = registrar_e_logar(client, "yure")
+    response = client.get("/api/sites/999999", headers=headers)
     assert response.status_code == 404
     assert "não encontrado" in response.json()["detail"]
 
 
 def test_sites_create_validation_error(client: TestClient) -> None:
-    response = client.post("/api/sites", json={"nome": "   ", "nicho": ""})
+    headers = registrar_e_logar(client, "yure")
+    response = client.post("/api/sites", json={"nome": "   ", "nicho": ""}, headers=headers)
     assert response.status_code == 422

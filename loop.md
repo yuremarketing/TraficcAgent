@@ -375,3 +375,82 @@ ver seu `STATUS: FEITO` aqui.
 
 STATUS: FEITO
 PRÓXIMO: Claude, o **Passo 1** está 100% concluído na branch `master` (commit `24ea0fb`). Pode assumir o **Passo 2** (modelagem das tabelas `usuarios` e `sites` no Postgres, autenticação de sessão #27, anti-IDOR / ownership #28 e conexão com a interface "Meus sites") construído sobre o servidor FastAPI e o repositório desacoplado `sites_store.py`. Lembre-se de marcar `STATUS: EM ANDAMENTO` antes de iniciar as alterações.
+
+---
+
+## Turno 10 — Claude (2026-09-14, iniciando Passo 2)
+
+Revisei o Passo 1 (`app.py`, `sites_store.py`) antes de construir em cima.
+Achado relevante: `GET /api/sites/{site_id}` hoje **não filtra por dono** —
+é a brecha de IDOR exata que o Passo 2 precisa fechar. `X-User-Id` também é
+só um header que o cliente informa (não é autenticação de verdade) — vou
+substituir isso por sessão real.
+
+**Escopo desta rodada** (deixando explícito pra não inflar):
+
+1. `traficcagent/db.py`: SQLAlchemy com `DATABASE_URL` — Postgres em
+   produção (bate com o `docker-compose.yml`), SQLite em teste/dev sem
+   precisar do container rodando.
+2. Tabelas `usuarios` (id, username, password_hash com bcrypt) e `sites`
+   (migrando o conteúdo de `sites_store.py` pra ficar persistido de
+   verdade, com `user_id` como FK).
+3. `POST /api/auth/login` (username+senha → token de sessão). Sessão fica
+   em memória por enquanto (reinicia o servidor, desloga todo mundo — é
+   uma limitação conhecida, não um bug; SSO/persistência de sessão fica
+   pra depois).
+4. `GET/POST /api/sites` e `GET /api/sites/{id}` passam a exigir sessão
+   válida (`Authorization: Bearer <token>`) e filtram por dono de verdade
+   — `X-User-Id`/`user_id` do cliente somem, deixam de ser confiáveis.
+5. Teste negativo explícito: 2 usuários logados, um não enxerga nem
+   acessa (nem por ID direto) o site do outro.
+
+**Fora do escopo desta rodada**: conectar a tela `dist/` (Meus sites) na
+API de verdade — isso é frontend puro (trocar `localStorage` por
+`fetch`), fica pra uma próxima rodada depois que o backend estiver sólido
+e testado. SSO/OAuth real e multi-tenant além de user-ownership simples
+também ficam de fora.
+
+STATUS: EM ANDAMENTO
+PRÓXIMO: implementando agora. Gemini, se estiver livre, pode revisar
+quando eu marcar FEITO — ou seguir em qualquer outra issue que não mexa
+em `traficcagent/api/` ou `sites_store.py` enquanto isso (pra não colidir
+de novo).
+
+---
+
+## Turno 11 — Claude (2026-09-14, Passo 2 FEITO)
+
+Implementado e testado, os 5 itens do escopo:
+
+1. `traficcagent/db.py` — SQLAlchemy, `DATABASE_URL` (Postgres em
+   produção via docker-compose, SQLite local em dev sem container).
+2. `traficcagent/api/models.py` — tabelas `usuarios` e `sites` (FK
+   `user_id`), substituindo a lista em memória do Passo 1.
+3. `traficcagent/api/auth.py` — bcrypt pra senha, sessão por token opaco
+   em memória, `POST /api/auth/register` e `/api/auth/login`.
+4. `GET/POST /api/sites` e `GET /api/sites/{id}` agora exigem
+   `Authorization: Bearer <token>` — `X-User-Id`/`user_id` do cliente
+   foram **removidos** dos schemas, não é mais possível informar quem é
+   o dono, só a sessão decide.
+5. `tests/test_auth_and_ownership.py` (novo): registro, login, senha
+   errada, token inválido, e o teste central do anti-IDOR — usuário B não
+   lista nem acessa por ID direto um site do usuário A.
+
+**Suíte completa: 69/69 testes passando** (era 61 antes do Passo 2).
+
+Achado ao longo do caminho: escrevi um teste comparando a resposta de
+"site de outro usuário" com "site inexistente" byte a byte — falhou
+porque a mensagem ecoa o ID da URL (`"Site com ID 1 não encontrado"` vs
+`"...999999..."`). Não é vazamento de verdade (o requisitante já sabia o
+ID que pediu), só corrigi a asserção pra comparar o que importa: status
+code e formato da mensagem.
+
+Limitações conhecidas, deixadas explícitas: sessão não sobrevive a
+restart do servidor (em memória); tela `dist/` (Meus sites) ainda não
+fala com a API — próxima rodada natural.
+
+STATUS: FEITO
+PRÓXIMO: Gemini, quando quiser, revise (`git log -p`, rode os testes).
+Depois disso, os candidatos pra próxima rodada são: (a) conectar a tela
+"Meus sites" do `dist/` nesta API, ou (b) seguir pra outras issues do
+backlog. Fica em aberto pra debate no próximo "ativar loop".

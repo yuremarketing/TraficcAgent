@@ -1,96 +1,55 @@
-"""Armazenamento de sites do TraficcAgent.
+"""Persistência de sites do TraficcAgent (Postgres/SQLite via SQLAlchemy).
 
-Oferece repositório em memória com interface desacoplada, preparado para
-que a Etapa 2 (Postgres / tabelas `usuarios` e `sites`) conecte a persistência
-em banco relacional sem alterar os contratos dos endpoints.
+Toda operação exige `owner_id` — não existe leitura ou escrita de site sem
+saber de quem é (issue #28: ownership/anti-IDOR). Nunca confie num user_id
+vindo do cliente; ele sempre deve vir de `auth.get_current_user`.
 """
 from __future__ import annotations
 
-import threading
-from typing import Any, Optional
+from typing import Optional
+
+from sqlalchemy.orm import Session
+
+from traficcagent.api.models import Site
 
 
-DEFAULT_SITES: list[dict[str, Any]] = [
-    {
-        "id": 1,
-        "nome": "Casa que Pensa",
-        "nicho": "Casa inteligente",
-        "responsavel": "Ana",
-        "status": "Publicado",
-        "user_id": "yure",
-    },
-    {
-        "id": 2,
-        "nome": "Café de Origem",
-        "nicho": "Cafés especiais",
-        "responsavel": "Bruno",
-        "status": "Produção",
-        "user_id": "philipy",
-    },
-    {
-        "id": 3,
-        "nome": "Escolha Pet",
-        "nicho": "Cuidados para pets",
-        "responsavel": "Carla",
-        "status": "Revisão",
-        "user_id": "yure",
-    },
-    {
-        "id": 4,
-        "nome": "Ferramenta Certa",
-        "nicho": "Ferramentas domésticas",
-        "responsavel": "Bruno",
-        "status": "Pauta pronta",
-        "user_id": "philipy",
-    },
-]
+def list_sites(db: Session, owner_id: int) -> list[Site]:
+    return (
+        db.query(Site)
+        .filter(Site.user_id == owner_id)
+        .order_by(Site.id.desc())
+        .all()
+    )
 
 
-class SitesStore:
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._sites: list[dict[str, Any]] = [dict(s) for s in DEFAULT_SITES]
-        self._next_id = 5
-
-    def list_sites(self, user_id: Optional[str] = None) -> list[dict[str, Any]]:
-        with self._lock:
-            if user_id:
-                return [dict(s) for s in self._sites if s.get("user_id") == user_id]
-            return [dict(s) for s in self._sites]
-
-    def add_site(
-        self,
-        nome: str,
-        nicho: str,
-        responsavel: str = "Ana",
-        status: str = "Planejamento",
-        user_id: Optional[str] = None,
-    ) -> dict[str, Any]:
-        with self._lock:
-            site = {
-                "id": self._next_id,
-                "nome": nome.strip(),
-                "nicho": nicho.strip(),
-                "responsavel": responsavel.strip(),
-                "status": status.strip(),
-                "user_id": user_id.strip() if user_id else None,
-            }
-            self._next_id += 1
-            self._sites.insert(0, site)
-            return dict(site)
-
-    def get_site(self, site_id: int) -> Optional[dict[str, Any]]:
-        with self._lock:
-            for s in self._sites:
-                if s["id"] == site_id:
-                    return dict(s)
-            return None
-
-    def reset(self) -> None:
-        with self._lock:
-            self._sites = [dict(s) for s in DEFAULT_SITES]
-            self._next_id = 5
+def add_site(
+    db: Session,
+    owner_id: int,
+    nome: str,
+    nicho: str,
+    responsavel: str = "Ana",
+    status: str = "Planejamento",
+) -> Site:
+    site = Site(
+        nome=nome.strip(),
+        nicho=nicho.strip(),
+        responsavel=responsavel.strip(),
+        status=status.strip(),
+        user_id=owner_id,
+    )
+    db.add(site)
+    db.commit()
+    db.refresh(site)
+    return site
 
 
-# Instância singleton padrão para uso na API
-store = SitesStore()
+def get_site_for_owner(db: Session, site_id: int, owner_id: int) -> Optional[Site]:
+    """Retorna o site só se pertencer a owner_id — None em qualquer outro
+    caso (não existe, ou existe mas é de outro usuário). De propósito
+    indistinguível: devolver 404 num caso e 403 no outro vaza a existência
+    de recursos de terceiros (a mesma classe de bug do achado #28)."""
+    return (
+        db.query(Site)
+        .filter(Site.id == site_id, Site.user_id == owner_id)
+        .first()
+    )
