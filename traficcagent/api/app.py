@@ -32,6 +32,7 @@ from traficcagent.api.schemas import (
     ProdutoInput,
     SiteCreate,
     SiteResponse,
+    SiteUpdate,
     StatusResponse,
     TokenResponse,
     UsuarioCreate,
@@ -265,6 +266,32 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         if not site:
             # Mesma resposta pra "não existe" e "existe mas não é seu" —
             # de propósito, pra não vazar a existência de sites de terceiros.
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Site com ID {site_id} não encontrado.",
+            )
+        return SiteResponse(
+            id=site.id,
+            nome=site.nome,
+            nicho=site.nicho,
+            responsavel=site.responsavel,
+            status=site.status,
+            user_id=site.user_id,
+        )
+
+    @app.patch("/api/sites/{site_id}", response_model=SiteResponse, tags=["Sites"])
+    def update_site(
+        site_id: int,
+        payload: SiteUpdate,
+        current_user: Usuario = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> SiteResponse:
+        site = sites_store.update_site_status(
+            db, site_id=site_id, owner_id=current_user.id, status=payload.status
+        )
+        if not site:
+            # Mesma regra anti-IDOR do GET: não existe e "existe mas não é
+            # seu" respondem igual.
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Site com ID {site_id} não encontrado.",

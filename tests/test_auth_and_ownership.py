@@ -100,3 +100,26 @@ def test_usuario_nao_acessa_site_do_outro_por_id_direto(client: TestClient) -> N
     resp_inexistente = client.get("/api/sites/999999", headers=yure)
     assert resp_outro.status_code == 404 == resp_inexistente.status_code
     assert "não encontrado" in resp_outro.json()["detail"]
+
+
+def test_patch_status_dono_funciona(client: TestClient) -> None:
+    dono = logar(client, "dono_patch")
+    criado = client.post("/api/sites", json={"nome": "Site", "nicho": "X"}, headers=dono).json()
+
+    resp = client.patch(f"/api/sites/{criado['id']}", json={"status": "Arquivado"}, headers=dono)
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "Arquivado"
+
+
+def test_patch_status_outro_usuario_nao_consegue(client: TestClient) -> None:
+    """Mesmo padrão anti-IDOR do GET: usuário B não arquiva site do usuário A."""
+    dono = logar(client, "dono_patch2")
+    outro = logar(client, "outro_patch2")
+    criado = client.post("/api/sites", json={"nome": "Site Sigiloso", "nicho": "X"}, headers=dono).json()
+
+    resp = client.patch(f"/api/sites/{criado['id']}", json={"status": "Arquivado"}, headers=outro)
+    assert resp.status_code == 404
+
+    # Confirma que o status do dono não mudou.
+    ainda_ativo = client.get(f"/api/sites/{criado['id']}", headers=dono).json()
+    assert ainda_ativo["status"] != "Arquivado"

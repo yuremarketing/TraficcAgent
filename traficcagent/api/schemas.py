@@ -57,6 +57,10 @@ class SiteCreate(BaseModel):
     # cliente — era exatamente essa brecha que permitia IDOR antes (#28).
 
 
+class SiteUpdate(BaseModel):
+    status: str = Field(..., min_length=1, description="Novo status do site")
+
+
 class SiteResponse(BaseModel):
     id: int
     nome: str

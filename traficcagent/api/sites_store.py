@@ -43,6 +43,18 @@ def add_site(
     return site
 
 
+def update_site_status(db: Session, site_id: int, owner_id: int, status: str) -> Optional[Site]:
+    """Atualiza o status só se o site pertencer a owner_id — None em
+    qualquer outro caso (mesma regra anti-IDOR de get_site_for_owner)."""
+    site = get_site_for_owner(db, site_id=site_id, owner_id=owner_id)
+    if site is None:
+        return None
+    site.status = status.strip()
+    db.commit()
+    db.refresh(site)
+    return site
+
+
 def get_site_for_owner(db: Session, site_id: int, owner_id: int) -> Optional[Site]:
     """Retorna o site só se pertencer a owner_id — None em qualquer outro
     caso (não existe, ou existe mas é de outro usuário). De propósito
