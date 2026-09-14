@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import math
 
 from traficcagent.config import BusinessRules
 
@@ -32,6 +33,14 @@ class Produto:
     nome: str
     preco: float
     comissao_pct: float
+
+    def __post_init__(self) -> None:
+        if not self.nome.strip():
+            raise ValueError("Produto precisa ter nome.")
+        if not math.isfinite(self.preco) or self.preco < 0:
+            raise ValueError("Preço precisa ser um número não negativo.")
+        if not math.isfinite(self.comissao_pct) or self.comissao_pct < 0:
+            raise ValueError("Comissão precisa ser um número não negativo.")
 
     @property
     def lucro_liquido(self) -> float:

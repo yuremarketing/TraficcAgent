@@ -8,6 +8,7 @@ dados determinísticos para não travar o resto do pipeline em dev/CI.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 import httpx
 
@@ -85,6 +86,49 @@ class AffiliateBotClient:
 
         data = resp.json()
         return LinkRastreavel(produto_id=produto_id, url_rastreavel=data["tracked_url"])
+
+    def converter_links(self, urls: list[str]) -> list[LinkRastreavel]:
+        """Converte links em lotes de no máximo 150 URLs.
+
+        A resposta real do Bot do Afiliado pode variar por versão; por isso a
+        validação é feita antes de expor o resultado ao restante do pipeline.
+        """
+        if not urls:
+            return []
+        resultados: list[LinkRastreavel] = []
+        for inicio in range(0, len(urls), 150):
+            lote = urls[inicio:inicio + 150]
+            if self.modo_mock:
+                resultados.extend(
+                    self._mock_link(str(inicio + indice), url)
+                    for indice, url in enumerate(lote)
+                )
+                continue
+            endpoint = f"{self.settings.affiliate_bot_base_url.rstrip('/')}/convert-links"
+            try:
+                resp = httpx.post(endpoint, headers=self._headers(), json={"urls": lote}, timeout=self.timeout_s)
+                resp.raise_for_status()
+                dados = resp.json()
+                itens = dados.get("links", dados) if isinstance(dados, dict) else dados
+                if not isinstance(itens, list):
+                    raise AffiliateBotError("Resposta de conversão inválida: esperado um lote de links.")
+                for item in itens:
+                    if not isinstance(item, dict) or not item.get("tracked_url"):
+                        raise AffiliateBotError("Resposta de conversão inválida: link rastreável ausente.")
+                    resultados.append(LinkRastreavel(
+                        produto_id=str(item.get("product_id", "")),
+                        url_rastreavel=self._validar_url(item["tracked_url"]),
+                    ))
+            except (httpx.HTTPError, ValueError) as exc:
+                raise AffiliateBotError(f"Falha ao converter lote de links: {exc}") from exc
+        return resultados
+
+    @staticmethod
+    def _validar_url(url: str) -> str:
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise AffiliateBotError("Link rastreável retornado não é uma URL válida.")
+        return url
 
     def _mock_metadados(self, produto_id: str) -> MetadadosProduto:
         return MetadadosProduto(

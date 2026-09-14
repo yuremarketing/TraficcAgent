@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import math
 
 from traficcagent.config import BusinessRules
 
@@ -29,6 +30,16 @@ class CampanhaMetrics:
     dias_ativa: int
     custo_total: float
     conversoes: int
+
+    def __post_init__(self) -> None:
+        if not self.nome.strip():
+            raise ValueError("Campanha precisa ter nome.")
+        if self.dias_ativa < 0:
+            raise ValueError("Dias ativos não podem ser negativos.")
+        if not math.isfinite(self.custo_total) or self.custo_total < 0:
+            raise ValueError("Custo total precisa ser um número não negativo.")
+        if self.conversoes < 0:
+            raise ValueError("Conversões não podem ser negativas.")
 
     @property
     def cpa(self) -> float | None:

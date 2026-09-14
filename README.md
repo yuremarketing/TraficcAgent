@@ -22,4 +22,50 @@ Abra `dist/index.html` em qualquer navegador. Não exige instalação ou servido
 - Configurações do modelo 90–10.
 - Organograma vertical da operação.
 
-Os dados ainda são demonstrativos e ficam em memória do navegador. Banco de dados, autenticação e integrações reais ficam para a próxima fase.
+Os dados do mockup ficam no navegador. O backend já possui lógica testada e integrações externas em modo mock até as credenciais e transportes oficiais serem configurados.
+
+## Backend (em construção)
+
+Agente que vai alimentar o dashboard com dados reais (issues #6, #7, #8, #9, #10, #11).
+A lógica de negócio das issues #8, #9 e #11 já está implementada e testada; as
+integrações externas (#6, #7, #10) rodam em modo mock até as credenciais reais
+chegarem via `.env`.
+
+```bash
+cp .env.example .env   # preencha com suas chaves
+pip install -r requirements.txt
+pytest                 # roda os testes de lógica de negócio
+pytest tests/test_google_ads.py -q  # testa o transporte MCP com fake
+python -m traficcagent # smoke test: mostra o que está em modo real vs mock
+docker compose up      # sobe o app + Postgres via Docker
+```
+
+### Preparação para Cloud Run
+
+O arquivo `cloudbuild.yaml` prepara build, publicação da imagem e deploy
+privado na porta 8080. Execute pelo Cloud Build com um projeto configurado:
+
+```bash
+gcloud builds submit --config cloudbuild.yaml .
+```
+
+Antes do deploy real, o container precisa expor um servidor HTTP persistente
+na porta 8080. O comando atual é apenas um smoke test e encerra após mostrar o
+status das integrações. Credenciais devem ser fornecidas por Secret Manager ou
+variáveis do ambiente, nunca pelo repositório.
+
+Estrutura:
+
+```text
+traficcagent/
+├── config.py              # settings lidas do ambiente + regras de negócio
+├── core/
+│   ├── financial_engine.py  # filtro de comissão (#8)
+│   ├── traffic_manager.py   # Early Stop / maturação (#9)
+│   └── seo_pivot.py         # gatilho de pivô para SEO orgânico (#11)
+├── integrations/
+│   ├── google_ads.py         # cliente Google Ads MCP (#6)
+│   └── affiliate_bot.py      # cliente da API do Bot do Afiliado (#7)
+└── content/
+    └── rag_engine.py         # motor RAG 90/10 + Schema.org (#10)
+```

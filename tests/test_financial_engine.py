@@ -1,4 +1,5 @@
 from traficcagent.config import BusinessRules
+import pytest
 from traficcagent.core.financial_engine import (
     DecisaoProduto,
     Produto,
@@ -46,3 +47,21 @@ def test_filtrar_produtos_preserva_ordem():
     assert [r.produto.nome for r in resultados] == ["Aceito", "Rejeitado"]
     assert resultados[0].decisao.aceito
     assert not resultados[1].decisao.aceito
+
+
+def test_lucro_liquido_arredonda_para_centavos():
+    produto = Produto(nome="Arredondamento", preco=99.99, comissao_pct=12.345)
+    assert produto.lucro_liquido == 12.34
+
+
+def test_rejeita_dados_financeiros_invalidos():
+    import math
+
+    for preco, comissao in [(-1, 10), (100, -1), (math.inf, 10), (100, math.nan)]:
+        with pytest.raises(ValueError):
+            Produto(nome="Inválido", preco=preco, comissao_pct=comissao)
+
+
+def test_rejeita_nome_vazio():
+    with pytest.raises(ValueError, match="nome"):
+        Produto(nome=" ", preco=100, comissao_pct=10)

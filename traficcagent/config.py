@@ -16,6 +16,11 @@ def _get_float(name: str, default: float) -> float:
     return float(value) if value else default
 
 
+def _get_int(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    return int(value.strip()) if value and value.strip() else default
+
+
 @dataclass(frozen=True)
 class BusinessRules:
     """Regras de negócio descritas no README / artefatos."""
@@ -36,6 +41,11 @@ class Settings:
     affiliate_bot_base_url: str
     anthropic_api_key: str | None
     rules: BusinessRules
+    google_ads_mcp_transport: str = "stdio"
+    google_ads_mcp_url: str | None = None
+    google_ads_mcp_command: str = "google-ads-mcp"
+    google_ads_mcp_tool: str = "search"
+    google_ads_mcp_max_retries: int = 3
 
     @property
     def has_google_ads_credentials(self) -> bool:
@@ -59,6 +69,11 @@ def load_settings() -> Settings:
             "BOT_AFILIADO_BASE_URL", "https://botdoafiliado.com/api/v1/"
         ),
         anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY"),
+        google_ads_mcp_transport=os.environ.get("GOOGLE_ADS_MCP_TRANSPORT", "stdio"),
+        google_ads_mcp_url=os.environ.get("GOOGLE_ADS_MCP_URL"),
+        google_ads_mcp_command=os.environ.get("GOOGLE_ADS_MCP_COMMAND", "google-ads-mcp"),
+        google_ads_mcp_tool=os.environ.get("GOOGLE_ADS_MCP_TOOL", "search"),
+        google_ads_mcp_max_retries=_get_int("GOOGLE_ADS_MCP_MAX_RETRIES", 3),
         rules=BusinessRules(
             comissao_minima_pct=_get_float("COMISSAO_MINIMA_PCT", 10.0),
             alto_ticket_lucro_min=_get_float("ALTO_TICKET_LUCRO_MIN", 40.0),
