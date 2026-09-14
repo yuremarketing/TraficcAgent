@@ -8,9 +8,9 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: traficcagent
-      POSTGRES_PASSWORD: traficcagent
-      POSTGRES_DB: traficcagent
+      POSTGRES_USER: ${POSTGRES_USER:-traficcagent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env}
+      POSTGRES_DB: ${POSTGRES_DB:-traficcagent}
     volumes:
       - db_data:/var/lib/postgresql/data
 
