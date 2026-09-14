@@ -16,6 +16,11 @@ def _get_float(name: str, default: float) -> float:
     return float(value) if value else default
 
 
+def _get_int(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    return int(value.strip()) if value and value.strip() else default
+
+
 @dataclass(frozen=True)
 class BusinessRules:
     """Regras de negócio descritas no README / artefatos."""
@@ -68,7 +73,7 @@ def load_settings() -> Settings:
         google_ads_mcp_url=os.environ.get("GOOGLE_ADS_MCP_URL"),
         google_ads_mcp_command=os.environ.get("GOOGLE_ADS_MCP_COMMAND", "google-ads-mcp"),
         google_ads_mcp_tool=os.environ.get("GOOGLE_ADS_MCP_TOOL", "search"),
-        google_ads_mcp_max_retries=int(os.environ.get("GOOGLE_ADS_MCP_MAX_RETRIES", "3")),
+        google_ads_mcp_max_retries=_get_int("GOOGLE_ADS_MCP_MAX_RETRIES", 3),
         rules=BusinessRules(
             comissao_minima_pct=_get_float("COMISSAO_MINIMA_PCT", 10.0),
             alto_ticket_lucro_min=_get_float("ALTO_TICKET_LUCRO_MIN", 40.0),

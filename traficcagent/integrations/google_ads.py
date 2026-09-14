@@ -57,7 +57,9 @@ class OfficialGoogleAdsMCPTransport:
             raise GoogleAdsMCPError("GOOGLE_ADS_MCP_URL é obrigatório no transporte HTTP.")
         try:
             import asyncio
-            from mcp import Client, StdioServerParameters
+            from mcp import ClientSession, StdioServerParameters
+            from mcp.client.stdio import stdio_client
+            from mcp.client.streamable_http import streamable_http_client
         except ImportError as exc:
             raise GoogleAdsMCPError("Dependência MCP ausente; instale mcp>=1.2.0.") from exc
 
@@ -67,8 +69,16 @@ class OfficialGoogleAdsMCPTransport:
             raise GoogleAdsMCPError("GOOGLE_ADS_MCP_URL é obrigatório no transporte HTTP.")
 
         async def invoke():
-            async with Client(target) as client:
-                return await client.call_tool(name, arguments)
+            if self.settings.google_ads_mcp_transport == "stdio":
+                async with stdio_client(target) as (read, write):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        return await session.call_tool(name, arguments)
+            else:
+                async with streamable_http_client(endpoint) as (read, write, _):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        return await session.call_tool(name, arguments)
 
         return asyncio.run(invoke())
 
@@ -99,15 +109,58 @@ class GoogleAdsMCPClient:
 
     def get_campanhas_ativas(self) -> list[CampanhaMetrics]:
         linhas = self.run_gaql(GAQL_CAMPANHAS_ATIVAS)
-        return [
-            CampanhaMetrics(
-                nome=linha["campaign_name"],
-                dias_ativa=linha["dias_ativa"],
-                custo_total=linha["custo_total"],
-                conversoes=linha["conversoes"],
-            )
-            for linha in linhas
-        ]
+        return [self._extrair_metrica_campanha(linha) for linha in linhas]
+
+    @staticmethod
+    def _extrair_metrica_campanha(linha: dict) -> CampanhaMetrics:
+        nome = (
+            linha.get("campaign_name")
+            or linha.get("campaign.name")
+            or (linha.get("campaign") or {}).get("name")
+            or "Campanha sem nome"
+        )
+        conversoes_raw = (
+            linha.get("conversoes")
+            or linha.get("metrics.conversions")
+            or (linha.get("metrics") or {}).get("conversions")
+            or 0
+        )
+        try:
+            conversoes = int(float(conversoes_raw))
+        except (ValueError, TypeError):
+            conversoes = 0
+
+        if "custo_total" in linha:
+            custo_total = float(linha["custo_total"])
+        elif "metrics.cost_micros" in linha or (isinstance(linha.get("metrics"), dict) and "cost_micros" in linha["metrics"]):
+            micros = float(linha.get("metrics.cost_micros") or linha["metrics"]["cost_micros"])
+            custo_total = round(micros / 1_000_000.0, 2)
+        elif "metrics.costMicros" in linha or (isinstance(linha.get("metrics"), dict) and "costMicros" in linha["metrics"]):
+            micros = float(linha.get("metrics.costMicros") or linha["metrics"]["costMicros"])
+            custo_total = round(micros / 1_000_000.0, 2)
+        else:
+            custo_total = 0.0
+
+        if "dias_ativa" in linha:
+            dias_ativa = int(linha["dias_ativa"])
+        else:
+            date_str = linha.get("segments.date") or (linha.get("segments") or {}).get("date")
+            if date_str:
+                try:
+                    from datetime import date
+                    dt = date.fromisoformat(str(date_str))
+                    dias_ativa = max(1, (date.today() - dt).days)
+                except Exception:
+                    dias_ativa = 1
+            else:
+                dias_ativa = 1
+
+        return CampanhaMetrics(
+            nome=nome,
+            dias_ativa=dias_ativa,
+            custo_total=custo_total,
+            conversoes=conversoes,
+        )
 
     def _run_real(self, query: str) -> list[dict]:
         transport = self.transport or OfficialGoogleAdsMCPTransport(self.settings)
@@ -130,19 +183,16 @@ class GoogleAdsMCPClient:
         raise GoogleAdsMCPError("Falha inesperada no transporte MCP.")
 
     def _call_and_normalize(self, transport: MCPTransport, query: str) -> list[dict]:
-        try:
-            if self.settings.google_ads_mcp_tool == "search":
-                argumentos = {
-                    "customer_id": self.settings.google_ads_customer_id,
-                    "fields": ["campaign.name", "metrics.cost_micros", "metrics.conversions", "segments.date"],
-                    "resource": "campaign",
-                    "conditions": ["campaign.status = 'ENABLED'"],
-                }
-            else:
-                argumentos = {"query": query}
-            resposta = transport.call_tool(self.settings.google_ads_mcp_tool, argumentos)
-        except Exception as exc:
-            raise
+        if self.settings.google_ads_mcp_tool == "search":
+            argumentos = {
+                "customer_id": self.settings.google_ads_customer_id,
+                "fields": ["campaign.name", "metrics.cost_micros", "metrics.conversions", "segments.date"],
+                "resource": "campaign",
+                "conditions": ["campaign.status = 'ENABLED'"],
+            }
+        else:
+            argumentos = {"query": query}
+        resposta = transport.call_tool(self.settings.google_ads_mcp_tool, argumentos)
         return self._normalizar_resposta(resposta)
 
     @staticmethod

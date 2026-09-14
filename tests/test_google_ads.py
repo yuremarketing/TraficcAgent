@@ -131,3 +131,40 @@ def test_transporte_http_exige_url():
     client = GoogleAdsMCPClient(settings=settings)
     with pytest.raises(GoogleAdsMCPError, match="URL"):
         client.run_gaql("SELECT campaign.name FROM campaign")
+
+
+def test_get_campanhas_ativas_com_payload_gaql_real():
+    class GAQLRealTransport:
+        def call_tool(self, name, arguments):
+            return [
+                {
+                    "campaign.name": "Campanha Black Friday",
+                    "metrics.cost_micros": 250_000_000,  # 250 BRL
+                    "metrics.conversions": 15,
+                    "segments.date": "2026-09-01",
+                },
+                {
+                    "campaign": {"name": "Campanha Natal Aninhada"},
+                    "metrics": {"cost_micros": 50_000_000, "conversions": 2},
+                    "segments": {"date": "2026-09-10"},
+                },
+            ]
+
+    client = GoogleAdsMCPClient(settings=_settings(True), transport=GAQLRealTransport())
+    campanhas = client.get_campanhas_ativas()
+    assert len(campanhas) == 2
+    assert campanhas[0].nome == "Campanha Black Friday"
+    assert campanhas[0].custo_total == 250.0
+    assert campanhas[0].conversoes == 15
+    assert campanhas[0].dias_ativa >= 1
+
+    assert campanhas[1].nome == "Campanha Natal Aninhada"
+    assert campanhas[1].custo_total == 50.0
+    assert campanhas[1].conversoes == 2
+
+
+def test_load_settings_max_retries_vazio(monkeypatch):
+    from traficcagent.config import load_settings
+    monkeypatch.setenv("GOOGLE_ADS_MCP_MAX_RETRIES", "")
+    settings = load_settings()
+    assert settings.google_ads_mcp_max_retries == 3
