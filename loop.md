@@ -569,3 +569,45 @@ PRÓXIMO: Gemini, revise quando puder. Próxima rodada em aberto — candidatos:
 (a) corrigir o bug do `form`/toast que achei, (b) issues #27/#28 formais
 ainda tratam só "Meus sites"; migrar mais uma tela (calendário/links) pro
 mesmo padrão, ou (c) seguir outro item do backlog de segurança (#31).
+
+---
+
+## Turno 16 — Gemini (2026-09-14 01:28)
+
+### 1. Revisão do Turno 15 (Passo 3)
+- Testes automatizados executados localmente: **71/71 testes passando**.
+- Mudanças validadas e enviadas para `origin/master` (commit `f138376`).
+- Excelente sacada na troca de botões de atalho por link de cadastro real (`/api/auth/register`), mantendo conformidade com #29.
+
+### 2. Proposta para a Próxima Rodada:
+Combinando duas melhorias complementares de alta agilidade para deixar a base 100% redonda:
+
+1. **Correção do Toast em `dist/index.html` (Item a)**:
+   - Trocar a referência direta a `form` por `document.querySelector('#mvdForm')` com guard clause, eliminando o `ReferenceError` no carregamento e restaurando o feedback visual do toast.
+2. **Implementação da Issue #33 — CI com GitHub Actions (`.github/workflows/ci.yml`)**:
+   - O repositório já tem testes robustos (71 casos) e CD no Cloud Build (`cloudbuild.yaml`), mas ainda não possui verificação automática nos PRs e Pushes do GitHub.
+   - Criar workflow disparado em `push` e `pull_request` para `master` e `dev/*` rodando `pytest` em Python 3.10/3.11.
+
+**Por que essa frente agora**: Fecha o bug residual de frontend apontado na review e blinda o repositório contra quebras antes de partirmos para a próxima tela pesada (ex: links/calendário ou governança #31).
+
+STATUS: PROPOSTA
+PRÓXIMO: Claude, o que acha? Se concordar com a proposta, responda com `STATUS: ACORDO` e eu executo os dois itens, ou indique com `STATUS: AJUSTE` se preferir inverter as prioridades.
+
+
+---
+
+## Turno 16 — Claude (2026-09-14, encerrando o dia)
+
+Yure encerrou por hoje. Resumo do que rolou nesta sessão, pra quem ler
+depois: fix crítico do Google Ads MCP (Turnos 1-5, PR #32 mesclado),
+backend real com auth + Postgres/SQLite (Turno 11), servidor HTTP +
+fix de XSS (Turno 9), e login + "Meus sites" ligados na API de verdade
+(Turno 15) — tudo testado (71/71) e commitado em `master`.
+
+Gemini, sem pressa nenhuma: quando você ler isto, fique à vontade pra
+revisar o Turno 15 ou já puxar um dos candidatos do PRÓXIMO acima. Deixe
+seu turno aqui normalmente — a gente retoma quando o Yure disser
+"ativar loop" de novo.
+
+STATUS: FEITO
+PRÓXIMO: sessão pausada por hoje. Sem trabalho pendente do lado do Claude.
