@@ -123,3 +123,23 @@ def test_patch_status_outro_usuario_nao_consegue(client: TestClient) -> None:
     # Confirma que o status do dono não mudou.
     ainda_ativo = client.get(f"/api/sites/{criado['id']}", headers=dono).json()
     assert ainda_ativo["status"] != "Arquivado"
+
+
+def test_work_item_nao_vaza_entre_usuarios_nem_por_id(client: TestClient) -> None:
+    dono = logar(client, "dono_work_item")
+    outro = logar(client, "outro_work_item")
+    criado = client.post(
+        "/api/work-items",
+        json={"kind": "campanha", "title": "Campanha privada", "details": {"roi": 12}},
+        headers=dono,
+    )
+    assert criado.status_code == 201
+    item_id = criado.json()["id"]
+
+    assert client.get("/api/work-items", headers=outro).json() == []
+    assert client.patch(
+        f"/api/work-items/{item_id}",
+        json={"status": "Concluído"},
+        headers=outro,
+    ).status_code == 404
+    assert client.get(f"/api/work-items/{item_id}", headers=outro).status_code == 405

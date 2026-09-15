@@ -15,6 +15,7 @@ operação distribuída:
 from __future__ import annotations
 
 import logging
+import json
 from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -23,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from traficcagent.api import sites_store
 from traficcagent.api.auth import create_session, get_current_user, hash_password, verify_password
-from traficcagent.api.models import Usuario
+from traficcagent.api.models import CampanhaRegistro, EventoOperacao, LinkAfiliado, ProdutoRegistro, ReviewRegistro, Site, Tenant, TenantMember, Usuario, WorkItem
 from traficcagent.api.schemas import (
     CampanhaResponse,
     HealthResponse,
@@ -35,8 +36,15 @@ from traficcagent.api.schemas import (
     SiteUpdate,
     StatusResponse,
     TokenResponse,
+    TenantResponse,
+    CoreContextResponse,
+    OperationEventCreate,
+    OperationEventResponse,
     UsuarioCreate,
     UsuarioResponse,
+    WorkItemCreate,
+    WorkItemUpdate,
+    WorkItemResponse,
 )
 from traficcagent.config import Settings, load_settings
 from traficcagent.core.financial_engine import Produto, avaliar_produto
@@ -58,7 +66,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=list(app_settings.cors_origins),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -212,6 +220,98 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             aceito=av.decisao.aceito,
         )
 
+    @app.get("/api/tenants", response_model=list[TenantResponse], tags=["Tenants"])
+    def list_authorized_tenants(
+        current_user: Usuario = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> list[TenantResponse]:
+        """Lista somente os sites/agentes aos quais a sessão pertence."""
+        rows = (
+            db.query(Tenant, TenantMember.role)
+            .join(TenantMember, TenantMember.tenant_id == Tenant.id)
+            .filter(TenantMember.user_id == current_user.id, TenantMember.status == "active")
+            .order_by(Tenant.id.desc())
+            .all()
+        )
+        return [TenantResponse(id=t.id, dominio=t.domain, nome=t.name, nicho=t.niche, status=t.status, papel=role) for t, role in rows]
+
+    @app.get("/api/tenants/{tenant_id}", response_model=TenantResponse, tags=["Tenants"])
+    def get_authorized_tenant(
+        tenant_id: int,
+        current_user: Usuario = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> TenantResponse:
+        """Resolve o agente ativo sem revelar tenants de terceiros."""
+        row = (
+            db.query(Tenant, TenantMember.role)
+            .join(TenantMember, TenantMember.tenant_id == Tenant.id)
+            .filter(Tenant.id == tenant_id, TenantMember.user_id == current_user.id, TenantMember.status == "active")
+            .first()
+        )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant não encontrado.")
+        tenant, role = row
+        return TenantResponse(id=tenant.id, dominio=tenant.domain, nome=tenant.name, nicho=tenant.niche, status=tenant.status, papel=role)
+
+    @app.get("/api/context", response_model=CoreContextResponse, tags=["Core"])
+    def get_core_context(
+        current_user: Usuario = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> CoreContextResponse:
+        """Contrato compartilhado pelo Core e por todas as abas operacionais."""
+        rows = (
+            db.query(Tenant, TenantMember.role)
+            .join(TenantMember, TenantMember.tenant_id == Tenant.id)
+            .filter(TenantMember.user_id == current_user.id, TenantMember.status == "active")
+            .order_by(Tenant.id.desc())
+            .all()
+        )
+        tenants = [TenantResponse(id=t.id, dominio=t.domain, nome=t.name, nicho=t.niche, status=t.status, papel=role) for t, role in rows]
+        return CoreContextResponse(usuario_id=current_user.id, username=current_user.username, tenants=tenants)
+
+    @app.get("/api/operacao/resumo", tags=["Operação"])
+    def operation_summary(tenant_id: int, dimensao: str = "Site", ambiente: str = "Operação", current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+        """Resumo compartilhado para Market Maker, Site, Nicho e Produto."""
+        member = db.query(TenantMember).filter(TenantMember.tenant_id == tenant_id, TenantMember.user_id == current_user.id, TenantMember.status == "active").first()
+        if member is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant não encontrado.")
+        allowed = {"Market Maker", "Site", "Nicho", "Produto"}
+        if dimensao not in allowed:
+            raise HTTPException(status_code=422, detail="Dimensão inválida.")
+        ambientes = {"Operação", "Finanças", "Conteúdo", "Tráfego", "Auditoria", "Configuração"}
+        if ambiente not in ambientes:
+            raise HTTPException(status_code=422, detail="Ambiente inválido.")
+        return {"tenant_id": tenant_id, "dimensao": dimensao, "ambiente": ambiente, "filtro_aplicado": dimensao + " / " + ambiente, "sites": db.query(Site).filter(Site.tenant_id == tenant_id).count(), "produtos": db.query(ProdutoRegistro).filter(ProdutoRegistro.tenant_id == tenant_id).count(), "links": db.query(LinkAfiliado).filter(LinkAfiliado.tenant_id == tenant_id).count(), "reviews": db.query(ReviewRegistro).filter(ReviewRegistro.tenant_id == tenant_id).count(), "campanhas": db.query(CampanhaRegistro).filter(CampanhaRegistro.tenant_id == tenant_id).count(), "modo": "manual/mock"}
+
+    @app.get("/api/operacao/catalogo", tags=["Operação"])
+    def operation_catalog(tenant_id: int, tipo: str = "site", current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+        member = db.query(TenantMember).filter(TenantMember.tenant_id == tenant_id, TenantMember.user_id == current_user.id, TenantMember.status == "active").first()
+        if member is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant não encontrado.")
+        tables = {"site": Site, "produto": ProdutoRegistro, "link": LinkAfiliado, "review": ReviewRegistro, "campanha": CampanhaRegistro}
+        model = tables.get(tipo.lower())
+        if model is None:
+            raise HTTPException(status_code=422, detail="Tipo de catálogo inválido.")
+        rows = db.query(model).filter(model.tenant_id == tenant_id).limit(200).all()
+        return {"tenant_id": tenant_id, "tipo": tipo.lower(), "items": [{"id": x.id, "status": getattr(x, "status", None), "nome": getattr(x, "nome", None) or getattr(x, "titulo", None) or getattr(x, "rede", None)} for x in rows]}
+
+    @app.post("/api/operacao/eventos", response_model=OperationEventResponse, status_code=status.HTTP_201_CREATED, tags=["Auditoria"])
+    def create_operation_event(payload: OperationEventCreate, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)) -> OperationEventResponse:
+        member = db.query(TenantMember).filter(TenantMember.tenant_id == payload.tenant_id, TenantMember.user_id == current_user.id, TenantMember.status == "active").first()
+        if member is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant não encontrado.")
+        event = EventoOperacao(tenant_id=payload.tenant_id, user_id=current_user.id, entidade=payload.entidade.strip(), entidade_id=payload.entidade_id, acao=payload.acao.strip(), etapa_anterior=payload.etapa_anterior, etapa_nova=payload.etapa_nova, detalhes=json.dumps(payload.detalhes, ensure_ascii=False))
+        db.add(event); db.commit(); db.refresh(event)
+        return OperationEventResponse(id=event.id, user_id=event.user_id, tenant_id=event.tenant_id, entidade=event.entidade, entidade_id=event.entidade_id, acao=event.acao, etapa_anterior=event.etapa_anterior, etapa_nova=event.etapa_nova, detalhes=payload.detalhes)
+
+    @app.get("/api/operacao/eventos", response_model=list[OperationEventResponse], tags=["Auditoria"])
+    def list_operation_events(tenant_id: int, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)) -> list[OperationEventResponse]:
+        member = db.query(TenantMember).filter(TenantMember.tenant_id == tenant_id, TenantMember.user_id == current_user.id, TenantMember.status == "active").first()
+        if member is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant não encontrado.")
+        events = db.query(EventoOperacao).filter(EventoOperacao.tenant_id == tenant_id).order_by(EventoOperacao.id.desc()).limit(100).all()
+        return [OperationEventResponse(id=e.id, user_id=e.user_id, tenant_id=e.tenant_id, entidade=e.entidade, entidade_id=e.entidade_id, acao=e.acao, etapa_anterior=e.etapa_anterior, etapa_nova=e.etapa_nova, detalhes=json.loads(e.detalhes or "{}")) for e in events]
+
     @app.get("/api/sites", response_model=list[SiteResponse], tags=["Sites"])
     def list_sites(
         current_user: Usuario = Depends(get_current_user),
@@ -246,6 +346,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             nicho=nicho,
             responsavel=payload.responsavel,
             status=payload.status,
+            dominio=payload.dominio,
         )
         return SiteResponse(
             id=novo_site.id,
@@ -254,6 +355,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             responsavel=novo_site.responsavel,
             status=novo_site.status,
             user_id=novo_site.user_id,
+            tenant_id=novo_site.tenant_id,
+            dominio=novo_site.tenant.domain if novo_site.tenant else None,
         )
 
     @app.get("/api/sites/{site_id}", response_model=SiteResponse, tags=["Sites"])
@@ -304,6 +407,39 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             status=site.status,
             user_id=site.user_id,
         )
+
+    @app.get("/api/work-items", response_model=list[WorkItemResponse], tags=["Operação"])
+    def list_work_items(
+        kind: Optional[str] = None,
+        current_user: Usuario = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> list[WorkItemResponse]:
+        query = db.query(WorkItem).filter(WorkItem.user_id == current_user.id)
+        if kind:
+            query = query.filter(WorkItem.kind == kind)
+        return [WorkItemResponse(id=x.id, kind=x.kind, title=x.title, status=x.status,
+                                 details=json.loads(x.details or "{}"), user_id=x.user_id)
+                for x in query.order_by(WorkItem.id.desc()).all()]
+
+    @app.post("/api/work-items", response_model=WorkItemResponse, status_code=status.HTTP_201_CREATED, tags=["Operação"])
+    def create_work_item(payload: WorkItemCreate, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)) -> WorkItemResponse:
+        item = WorkItem(kind=payload.kind.strip(), title=payload.title.strip(), status=payload.status.strip(),
+                        details=json.dumps(payload.details), user_id=current_user.id)
+        db.add(item); db.commit(); db.refresh(item)
+        return WorkItemResponse(id=item.id, kind=item.kind, title=item.title, status=item.status,
+                                details=payload.details, user_id=item.user_id)
+
+    @app.patch("/api/work-items/{item_id}", response_model=WorkItemResponse, tags=["Operação"])
+    def update_work_item(item_id: int, payload: WorkItemUpdate, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)) -> WorkItemResponse:
+        item = db.query(WorkItem).filter(WorkItem.id == item_id, WorkItem.user_id == current_user.id).first()
+        if not item:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registro não encontrado.")
+        if payload.title is not None: item.title = payload.title.strip()
+        if payload.status is not None: item.status = payload.status.strip()
+        if payload.details is not None: item.details = json.dumps(payload.details)
+        db.commit(); db.refresh(item)
+        return WorkItemResponse(id=item.id, kind=item.kind, title=item.title, status=item.status,
+                                details=json.loads(item.details or "{}"), user_id=item.user_id)
 
     return app
 

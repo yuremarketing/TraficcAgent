@@ -125,3 +125,31 @@ Para escalar a criação de sites de review sem comprometer o  **E-E-A-T** :
 * Monitoramento avançado de performance via queries  **GAQL**  customizadas para  **AI Overviews** .
 
 &nbsp;
+
+#### 7. Diretriz Consolidada do Negócio
+
+##### 7.1. Visão comercial do Philipy
+
+O TraficcAgent é um aplicativo de agente autônomo para operar uma fábrica de sites em massa. O primeiro objetivo é criar e distribuir sites para diferentes nichos, utilizando links de afiliados para gerar tráfego, testar ofertas e validar oportunidades. O segundo objetivo é transformar o sistema em uma plataforma com outras fontes de receita, incluindo venda de produtos, sites, serviços, leads, assinaturas e automações.
+
+A escala deve ser consequência da validação: primeiro um nicho, um site e uma oferta com rastreamento real; depois a replicação do que apresentar sinais de tráfego, cliques, conversões e comissão.
+
+##### 7.2. Visão IA First e agentica do Yure
+
+A operação deve ser pensada de forma **IA First**: a inteligência artificial é o núcleo do sistema, e não apenas uma funcionalidade adicional. O agente deve compreender objetivos, fazer perguntas, analisar dados, responder, propor ações e participar progressivamente de todo o ciclo de criação e gestão dos sites.
+
+Essa visão é ampla e orienta produto, processos e arquitetura. As perguntas, análises e críticas devem ser usadas para avaliar se cada decisão aproxima o sistema de uma operação realmente agentica, útil, segura e escalável.
+
+##### 7.3. Ciclo de validação e monetização
+
+O sistema deve acompanhar o ciclo completo:
+
+`Pesquisa → Criação → Conteúdo → Revisão → Publicação → Tráfego → Clique → Conversão → Comissão → Otimização`
+
+O dashboard deve distinguir dados simulados de dados reais e registrar, por site e campanha, publicação, indexação, impressões, visitas, cliques, conversões, comissão, custos, CPA, ROAS, ROI e lucro líquido. A maturação de SEO deve ser considerada antes de uma decisão de Early Stop; a referência operacional inicial é avaliar sinais relevantes em uma janela de 60 a 90 dias, sem tratar esse período como garantia de receita.
+
+##### 7.4. Governança estratégica
+
+Yure atua como sócio operacional, responsável pela arquitetura, operação, visão agentica e vendas. Philipy atua como sócio capitalista, responsável por capital, distribuição, afiliados, métricas comerciais e vendas. Ambos compartilham o dever de agir com transparência, proteger o patrimônio e a propriedade intelectual, prestar contas e aprovar conjuntamente investimentos relevantes, mudanças de estratégia, contratações-chave, endividamento e novas linhas de negócio.
+
+Nenhuma funcionalidade será considerada validada apenas por existir no protótipo. A validação exige persistência adequada, integração real, rastreamento, segurança, teste de ponta a ponta e evidência de resultado.

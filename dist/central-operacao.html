@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TraficcAgent - Central de operação</title>
+  <style>
+    :root{font-family:Inter,system-ui,sans-serif;color:#172033;background:#f5f7fb}*{box-sizing:border-box}body{margin:0}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 24px;background:#101827;color:#fff}.top h1{font-size:20px;margin:0}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{display:inline-block;text-decoration:none;border:0;border-radius:8px;padding:10px 14px;background:#4169e1;color:#fff;font-weight:750}.btn.alt{background:#eef2ff;color:#4169e1}.notice{margin:18px auto 0;max-width:1400px;padding:12px 18px;background:#e8f7ef;color:#16734f;border-radius:10px}.frame{display:block;width:100%;height:calc(100vh - 120px);min-height:720px;border:0;margin-top:12px;background:#f5f7fb}
+  </style>
+</head>
+<body>
+  <header class="top">
+    <h1>TraficcAgent · Central de operação</h1>
+    <nav class="actions" aria-label="Navegação do MVD">
+      <a class="btn alt" href="mvp.html">Dashboard</a>
+      <a class="btn alt" href="usuarios.html">Usuários</a>
+      <a class="btn" href="operacao.html">Abrir em tela cheia</a>
+    </nav>
+  </header>
+  <div class="notice" role="status">Modo Tester: valide as oito etapas, o double-check 90/10 e o histórico. Dados ficam somente neste navegador.</div>
+  <iframe class="frame" title="Central de operação do TraficcAgent" src="operacao.html"></iframe>
+</body>
+</html>
+<script src="runtime-config.js"></script><script src="core-interoperability.js"></script>

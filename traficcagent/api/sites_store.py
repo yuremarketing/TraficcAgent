@@ -10,7 +10,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from traficcagent.api.models import Site
+from traficcagent.api.models import Site, Tenant, TenantMember
 
 
 def list_sites(db: Session, owner_id: int) -> list[Site]:
@@ -29,13 +29,20 @@ def add_site(
     nicho: str,
     responsavel: str = "Ana",
     status: str = "Planejamento",
+    dominio: Optional[str] = None,
 ) -> Site:
+    domain = (dominio or f"{nome.strip().lower().replace(' ', '-')}.local").strip().lower()
+    tenant = Tenant(domain=domain, name=nome.strip(), niche=nicho.strip())
+    db.add(tenant)
+    db.flush()
+    db.add(TenantMember(tenant_id=tenant.id, user_id=owner_id, role="owner"))
     site = Site(
         nome=nome.strip(),
         nicho=nicho.strip(),
         responsavel=responsavel.strip(),
         status=status.strip(),
         user_id=owner_id,
+        tenant_id=tenant.id,
     )
     db.add(site)
     db.commit()
