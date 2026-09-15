@@ -46,6 +46,7 @@ class Settings:
     google_ads_mcp_command: str = "google-ads-mcp"
     google_ads_mcp_tool: str = "search"
     google_ads_mcp_max_retries: int = 3
+    cors_origins: tuple[str, ...] = ("http://localhost:8080",)
 
     @property
     def has_google_ads_credentials(self) -> bool:
@@ -61,6 +62,13 @@ class Settings:
 
 
 def load_settings() -> Settings:
+    cors_origins = tuple(
+        origin.strip().rstrip("/")
+        for origin in os.environ.get(
+            "CORS_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080"
+        ).split(",")
+        if origin.strip()
+    )
     return Settings(
         google_ads_developer_token=os.environ.get("GOOGLE_ADS_DEVELOPER_TOKEN"),
         google_ads_customer_id=os.environ.get("GOOGLE_ADS_CUSTOMER_ID"),
@@ -74,6 +82,7 @@ def load_settings() -> Settings:
         google_ads_mcp_command=os.environ.get("GOOGLE_ADS_MCP_COMMAND", "google-ads-mcp"),
         google_ads_mcp_tool=os.environ.get("GOOGLE_ADS_MCP_TOOL", "search"),
         google_ads_mcp_max_retries=_get_int("GOOGLE_ADS_MCP_MAX_RETRIES", 3),
+        cors_origins=cors_origins,
         rules=BusinessRules(
             comissao_minima_pct=_get_float("COMISSAO_MINIMA_PCT", 10.0),
             alto_ticket_lucro_min=_get_float("ALTO_TICKET_LUCRO_MIN", 40.0),

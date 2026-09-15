@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: traficcagent-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: GOOGLE_ADS_DEVELOPER_TOKEN
+        sync: false
+      - key: GOOGLE_ADS_CUSTOMER_ID
+        sync: false
+      - key: BOT_AFILIADO_API_KEY
+        sync: false
+      - key: BOT_AFILIADO_BASE_URL
+        value: https://botdoafiliado.com/api/v1/
+      - key: ANTHROPIC_API_KEY
+        sync: false

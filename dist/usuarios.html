@@ -25,12 +25,17 @@
         <ul class="permissions"><li>Definir arquitetura e padrões técnicos</li><li>Revisar código e integrações</li><li>Gerenciar operação, arquitetura e vendas</li><li>Aprovar deploy e regras de produção</li></ul>
         <button class="btn select" type="button">Entrar como Yure</button>
       </article>
+      <article class="card" data-user="tester">
+        <div class="avatar" style="background:#64748b">T</div><h2>Tester</h2><div class="role" style="color:#64748b">Usuário de validação · sem permissões de produção</div>
+        <ul class="permissions"><li>Testar navegação e responsividade</li><li>Validar fluxos do MVD</li><li>Registrar bugs e evidências</li></ul>
+        <button class="btn select" type="button">Entrar como Tester</button>
+      </article>
     </section>
     <div class="status" id="status" role="status">Nenhum perfil selecionado.</div>
   </main>
   <script>
     const key='traficcagent-active-user-v1';
-    const labels={philipy:'Philipy ativo — sócio capitalista, distribuição e vendas.',yure:'Yure ativo — sócio operacional, arquitetura e vendas.'};
+     const labels={philipy:'Philipy ativo — sócio capitalista, distribuição e vendas.',yure:'Yure ativo — sócio operacional, arquitetura e vendas.',tester:'Tester ativo — validação do MVD, sem permissões de produção.'};
     const selected=localStorage.getItem(key); if(selected){document.querySelector(`[data-user="${selected}"]`)?.classList.add('active');document.querySelector('#status').textContent=labels[selected]||'Perfil ativo.';}
     document.querySelectorAll('.select').forEach(button=>button.addEventListener('click',()=>{const user=button.closest('[data-user]').dataset.user;localStorage.setItem(key,user);document.querySelectorAll('[data-user]').forEach(card=>card.classList.remove('active'));button.closest('[data-user]').classList.add('active');document.querySelector('#status').textContent=labels[user];}));
   </script>
